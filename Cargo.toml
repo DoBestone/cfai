@@ -1,0 +1,65 @@
+[package]
+name = "cfai"
+version = "0.1.0"
+edition = "2021"
+authors = ["DoBest"]
+description = "AI-powered Cloudflare management tool - CLI & GUI"
+license = "MIT"
+readme = "README.md"
+keywords = ["cloudflare", "dns", "ai", "cli", "devops"]
+categories = ["command-line-utilities", "web-programming"]
+
+[[bin]]
+name = "cfai"
+path = "src/main.rs"
+
+[dependencies]
+# CLI framework
+clap = { version = "4", features = ["derive", "env", "color"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+thiserror = "2"
+
+# Terminal UI
+colored = "2"
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
+indicatif = "0.17"
+comfy-table = "7"
+console = "0.15"
+
+# Configuration
+toml = "0.8"
+dirs = "5"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Date/Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Async trait
+async-trait = "0.1"
+
+# URL handling
+url = "2"
+
+# Clipboard
+arboard = "3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1
