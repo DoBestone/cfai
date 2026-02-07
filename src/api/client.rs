@@ -179,6 +179,31 @@ impl CfClient {
         self.handle_response(resp).await
     }
 
+    /// POST 请求到指定 URL (返回原始 JSON)
+    pub async fn post_raw<B: serde::Serialize>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> Result<serde_json::Value> {
+        debug!("POST {}", url);
+        let resp = self
+            .client
+            .post(url)
+            .json(body)
+            .send()
+            .await
+            .context("POST 请求失败")?;
+
+        let status = resp.status();
+        let body_text = resp.text().await.context("读取响应体失败")?;
+
+        if !status.is_success() {
+            anyhow::bail!("HTTP 错误 {}: {}", status.as_u16(), body_text);
+        }
+
+        serde_json::from_str(&body_text).context("解析 JSON 响应失败")
+    }
+
     /// 处理响应
     async fn handle_response<T: DeserializeOwned>(
         &self,
