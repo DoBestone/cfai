@@ -612,7 +612,8 @@ fn build_config_args(theme: &ColorfulTheme) -> Result<Option<Vec<String>>> {
     output::step(10, "配置管理");
 
     let items = vec![
-        "⚙️  配置向导",
+        "✏️  编辑配置 (推荐)",
+        "⚙️  配置向导 (完整设置)",
         "👀 查看配置",
         "🔑 查看配置（显示密钥）",
         "✅ 验证配置",
@@ -626,11 +627,12 @@ fn build_config_args(theme: &ColorfulTheme) -> Result<Option<Vec<String>>> {
         .interact()?;
 
     match selection {
-        0 => Ok(Some(vec!["config".into(), "setup".into()])),
-        1 => Ok(Some(vec!["config".into(), "show".into()])),
-        2 => Ok(Some(vec!["config".into(), "show".into(), "--show-secrets".into()])),
-        3 => Ok(Some(vec!["config".into(), "verify".into()])),
-        4 => Ok(Some(vec!["config".into(), "path".into()])),
+        0 => Ok(Some(vec!["config".into(), "edit".into()])),
+        1 => Ok(Some(vec!["config".into(), "setup".into()])),
+        2 => Ok(Some(vec!["config".into(), "show".into()])),
+        3 => Ok(Some(vec!["config".into(), "show".into(), "--show-secrets".into()])),
+        4 => Ok(Some(vec!["config".into(), "verify".into()])),
+        5 => Ok(Some(vec!["config".into(), "path".into()])),
         _ => Ok(None),
     }
 }
