@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# CFAI 安装/更新脚本
-# 用法:
-#   安装: curl -fsSL https://raw.githubusercontent.com/DoBestone/cfai/main/scripts/install.sh | bash
-#   更新: curl -fsSL https://raw.githubusercontent.com/DoBestone/cfai/main/scripts/install.sh | bash -s -- --update
+# CFAI 一键安装脚本
+# 用法: curl -fsSL https://raw.githubusercontent.com/DoBestone/cfai/main/scripts/install.sh | bash
 
 REPO="${CFAI_REPO:-DoBestone/cfai}"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
-UPDATE_MODE=false
+# GitHub 镜像加速 (国内用户)
+MIRROR="${CFAI_MIRROR:-https://mirror.ghproxy.com/}"
 
-# 颜色输出
+# 颜色
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -22,30 +21,16 @@ error() { echo -e "${RED}错误:${NC} $1" >&2; exit 1; }
 warn() { echo -e "${YELLOW}警告:${NC} $1" >&2; }
 step() { echo -e "${CYAN}[$1]${NC} $2"; }
 
-# 解析参数
-parse_args() {
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            --update|-u) UPDATE_MODE=true; shift ;;
-            --dir=*) INSTALL_DIR="${1#*=}"; shift ;;
-            --help|-h)
-                echo "CFAI 安装/更新脚本"
-                echo ""
-                echo "用法:"
-                echo "  bash install.sh [选项]"
-                echo ""
-                echo "选项:"
-                echo "  --update, -u    更新已安装的 cfai"
-                echo "  --dir=PATH      指定安装目录 (默认: /usr/local/bin)"
-                echo "  --help, -h      显示帮助"
-                exit 0
-                ;;
-            *) shift ;;
-        esac
-    done
+# 检测是否需要镜像加速
+need_mirror() {
+    local test_time=$(curl -o /dev/null -s -w '%{time_total}' --connect-timeout 3 "https://github.com" 2>/dev/null || echo "999")
+    if (( $(echo "$test_time > 2" | bc -l 2>/dev/null || echo 1) )); then
+        return 0
+    fi
+    return 1
 }
 
-# 检测操作系统和架构
+# 检测平台
 detect_platform() {
     local os=$(uname -s | tr '[:upper:]' '[:lower:]')
     local arch=$(uname -m)
@@ -66,7 +51,7 @@ detect_platform() {
     step "平台" "$OS-$ARCH"
 }
 
-# 检查安装目录权限
+# 检查安装目录
 check_install_dir() {
     if [[ ! -d "$INSTALL_DIR" ]]; then
         if ! mkdir -p "$INSTALL_DIR" 2>/dev/null; then
@@ -79,30 +64,12 @@ check_install_dir() {
         warn "$INSTALL_DIR 无写入权限，将安装到 $HOME/.local/bin"
         INSTALL_DIR="$HOME/.local/bin"
         mkdir -p "$INSTALL_DIR"
-
-        if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
-            warn "请将 $INSTALL_DIR 添加到 PATH:"
-            echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
-        fi
     fi
 
     step "安装目录" "$INSTALL_DIR"
 }
 
-# 获取当前版本
-get_current_version() {
-    local cfai_path="$INSTALL_DIR/cfai"
-    if [[ -f "$cfai_path" ]]; then
-        CURRENT_VERSION=$("$cfai_path" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo "")
-        if [[ -n "$CURRENT_VERSION" ]]; then
-            step "当前版本" "v$CURRENT_VERSION"
-        fi
-    else
-        CURRENT_VERSION=""
-    fi
-}
-
-# 获取最新版本信息
+# 获取最新版本
 get_latest_release() {
     step "检查" "正在获取最新版本..."
 
@@ -115,13 +82,12 @@ get_latest_release() {
 
     VERSION=$(echo "$response" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/"tag_name": *"\([^"]*\)"/\1/')
 
-    # 根据平台选择正确的资源
+    # 根据平台选择资源
     local pattern="cfai.*${OS}.*${ARCH}"
     DOWNLOAD_URL=$(echo "$response" | grep -o '"browser_download_url": *"[^"]*'"$pattern"'[^"]*"' | head -1 | sed 's/"browser_download_url": *"\([^"]*\)"/\1/')
     ASSET_NAME=$(basename "$DOWNLOAD_URL" 2>/dev/null || echo "")
 
     if [[ -z "$DOWNLOAD_URL" ]]; then
-        # 回退：尝试获取任何可用的资源
         DOWNLOAD_URL=$(echo "$response" | grep -o '"browser_download_url": *"[^"]*cfai[^"]*"' | head -1 | sed 's/"browser_download_url": *"\([^"]*\)"/\1/')
         ASSET_NAME=$(basename "$DOWNLOAD_URL" 2>/dev/null || echo "")
     fi
@@ -131,13 +97,6 @@ get_latest_release() {
     fi
 
     step "最新版本" "$VERSION"
-
-    # 检查是否需要更新
-    local latest_ver="${VERSION#v}"
-    if [[ -n "$CURRENT_VERSION" ]] && [[ "$CURRENT_VERSION" == "$latest_ver" ]]; then
-        info "已是最新版本 ($VERSION)，无需更新"
-        exit 0
-    fi
 }
 
 # 下载并安装
@@ -146,10 +105,24 @@ install_cfai() {
     trap 'rm -rf "$tmp_dir"' EXIT
 
     local download_file="$tmp_dir/$ASSET_NAME"
+    local final_url="$DOWNLOAD_URL"
+
+    # 检测是否使用镜像
+    if need_mirror 2>/dev/null; then
+        step "加速" "使用镜像下载..."
+        final_url="${MIRROR}${DOWNLOAD_URL}"
+    fi
 
     step "下载" "$ASSET_NAME"
-    if ! curl -fsSL "$DOWNLOAD_URL" -o "$download_file" --progress-bar; then
-        error "下载失败"
+    if ! curl -fSL "$final_url" -o "$download_file" --progress-bar --connect-timeout 10; then
+        if [[ "$final_url" != "$DOWNLOAD_URL" ]]; then
+            warn "镜像下载失败，尝试直连..."
+            if ! curl -fSL "$DOWNLOAD_URL" -o "$download_file" --progress-bar; then
+                error "下载失败"
+            fi
+        else
+            error "下载失败"
+        fi
     fi
 
     step "安装" "正在解压..."
@@ -158,7 +131,6 @@ install_cfai() {
 
     if [[ "$ASSET_NAME" == *.tar.gz ]] || [[ "$ASSET_NAME" == *.tgz ]]; then
         tar -xzf "$download_file" -C "$tmp_dir"
-        # 查找 cfai 可执行文件（支持 cfai, cfai-darwin-arm64 等格式）
         bin_file=$(find "$tmp_dir" -type f \( -name "cfai" -o -name "cfai-*" -o -name "cfai.exe" \) ! -name "*.md" ! -name "*.txt" -print -quit)
     elif [[ "$ASSET_NAME" == *.zip ]]; then
         unzip -q "$download_file" -d "$tmp_dir"
@@ -171,7 +143,6 @@ install_cfai() {
         error "未找到可执行文件"
     fi
 
-    # 安装到目标目录
     local target="$INSTALL_DIR/cfai"
     if [[ -w "$INSTALL_DIR" ]]; then
         cp "$bin_file" "$target"
@@ -196,24 +167,17 @@ verify_installation() {
 
     echo ""
     echo -e "${GREEN}════════════════════════════════════════${NC}"
-    if $UPDATE_MODE; then
-        echo -e "${GREEN}  ✅ CFAI 更新成功！${NC}"
-    else
-        echo -e "${GREEN}  ✅ CFAI 安装成功！${NC}"
-    fi
+    echo -e "${GREEN}  ✅ CFAI 安装成功！${NC}"
     echo -e "${GREEN}════════════════════════════════════════${NC}"
     echo ""
     echo "  版本: $installed_version"
     echo "  路径: $cfai_path"
     echo ""
-
-    if ! $UPDATE_MODE; then
-        echo "快速开始:"
-        echo "  cfai config setup    配置 API"
-        echo "  cfai zone list       列出域名"
-        echo "  cfai --help          查看帮助"
-        echo ""
-    fi
+    echo "快速开始:"
+    echo "  cfai config setup    配置 API"
+    echo "  cfai zone list       列出域名"
+    echo "  cfai --help          查看帮助"
+    echo ""
 
     if ! command -v cfai >/dev/null 2>&1; then
         warn "cfai 不在 PATH 中，请添加:"
@@ -224,11 +188,8 @@ verify_installation() {
 
 # 主流程
 main() {
-    parse_args "$@"
-
-    if ! $UPDATE_MODE; then
-        echo -e "${GREEN}"
-        cat << "EOF"
+    echo -e "${GREEN}"
+    cat << "EOF"
    ____ _____  _    ___
   / ___|  ___/ \  |_ _|
  | |   | |_ / _ \  | |
@@ -237,16 +198,10 @@ main() {
 
   AI-Powered Cloudflare CLI
 EOF
-        echo -e "${NC}"
-    else
-        echo ""
-        info "CFAI 更新检查"
-        echo ""
-    fi
+    echo -e "${NC}"
 
     detect_platform
     check_install_dir
-    get_current_version
     get_latest_release
     install_cfai
     verify_installation

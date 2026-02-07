@@ -5,6 +5,8 @@ set -euo pipefail
 # 用法: curl -fsSL https://raw.githubusercontent.com/DoBestone/cfai/main/scripts/update.sh | bash
 
 REPO="${CFAI_REPO:-DoBestone/cfai}"
+# GitHub 镜像加速 (国内用户)
+MIRROR="${CFAI_MIRROR:-https://mirror.ghproxy.com/}"
 
 # 颜色
 RED='\033[0;31m'
@@ -17,6 +19,16 @@ info() { echo -e "${GREEN}==>${NC} $1"; }
 error() { echo -e "${RED}错误:${NC} $1" >&2; exit 1; }
 warn() { echo -e "${YELLOW}警告:${NC} $1" >&2; }
 step() { echo -e "${CYAN}[$1]${NC} $2"; }
+
+# 检测是否需要镜像加速
+need_mirror() {
+    # 测试直连 GitHub 速度
+    local test_time=$(curl -o /dev/null -s -w '%{time_total}' --connect-timeout 3 "https://github.com" 2>/dev/null || echo "999")
+    if (( $(echo "$test_time > 2" | bc -l 2>/dev/null || echo 1) )); then
+        return 0  # 需要镜像
+    fi
+    return 1  # 不需要镜像
+}
 
 # 查找已安装的 cfai
 find_cfai() {
@@ -105,10 +117,25 @@ update_cfai() {
     trap 'rm -rf "$tmp_dir"' EXIT
 
     local download_file="$tmp_dir/$ASSET_NAME"
+    local final_url="$DOWNLOAD_URL"
+
+    # 检测是否使用镜像
+    if need_mirror 2>/dev/null; then
+        step "加速" "使用镜像下载..."
+        final_url="${MIRROR}${DOWNLOAD_URL}"
+    fi
 
     step "下载" "$ASSET_NAME"
-    if ! curl -fsSL "$DOWNLOAD_URL" -o "$download_file" --progress-bar; then
-        error "下载失败"
+    if ! curl -fSL "$final_url" -o "$download_file" --progress-bar --connect-timeout 10; then
+        # 镜像失败，尝试直连
+        if [[ "$final_url" != "$DOWNLOAD_URL" ]]; then
+            warn "镜像下载失败，尝试直连..."
+            if ! curl -fSL "$DOWNLOAD_URL" -o "$download_file" --progress-bar; then
+                error "下载失败"
+            fi
+        else
+            error "下载失败"
+        fi
     fi
 
     step "更新" "正在安装..."
