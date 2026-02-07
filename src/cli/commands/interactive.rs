@@ -671,7 +671,7 @@ fn prompt_domain(theme: &ColorfulTheme) -> Result<String> {
             output::loading("正在获取域名列表...");
             let exe = std::env::current_exe().map_err(|e| anyhow!("获取可执行文件失败: {}", e))?;
             let output = Command::new(exe)
-                .args(&["zone", "list", "--format", "plain"])
+                .args(&["zone", "list", "--format", "json"])
                 .output()?;
 
             if !output.status.success() {
@@ -680,14 +680,27 @@ fn prompt_domain(theme: &ColorfulTheme) -> Result<String> {
             }
 
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let domains: Vec<&str> = stdout.lines().filter(|line| !line.trim().is_empty()).collect();
+
+            // 解析 JSON 获取域名列表
+            let domains: Vec<String> = match serde_json::from_str::<serde_json::Value>(&stdout) {
+                Ok(json) => {
+                    if let Some(arr) = json.as_array() {
+                        arr.iter()
+                            .filter_map(|v| v.get("name").and_then(|n| n.as_str()).map(|s| s.to_string()))
+                            .collect()
+                    } else {
+                        vec![]
+                    }
+                }
+                Err(_) => vec![],
+            };
 
             if domains.is_empty() {
                 output::warn("未找到域名，请手动输入");
                 return prompt_text(theme, "域名 (如: example.com)");
             }
 
-            let mut domain_items = domains.clone();
+            let mut domain_items: Vec<&str> = domains.iter().map(|s| s.as_str()).collect();
             domain_items.push("⬅️  返回");
 
             let domain_sel = Select::with_theme(theme)
@@ -700,7 +713,7 @@ fn prompt_domain(theme: &ColorfulTheme) -> Result<String> {
                 return Err(anyhow!("用户取消操作"));
             }
 
-            Ok(domains[domain_sel].to_string())
+            Ok(domains[domain_sel].clone())
         }
         1 => {
             // 手动输入
