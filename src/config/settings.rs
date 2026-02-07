@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -187,83 +188,234 @@ impl AppConfig {
 
     /// 交互式配置向导
     pub fn interactive_setup() -> Result<Self> {
-        use dialoguer::{Input, Select};
+        use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
 
-        println!("\n🔧 CFAI 配置向导\n");
+        let theme = ColorfulTheme::default();
 
-        // Cloudflare 认证方式选择
-        let auth_options = vec!["API Token (推荐)", "Email + Global API Key"];
-        let auth_choice = Select::new()
-            .with_prompt("选择 Cloudflare 认证方式")
+        println!("\n{}", "╔══════════════════════════════════════════════════╗".cyan());
+        println!("{}", "║        🚀 CFAI 配置向导 - 交互式设置             ║".cyan());
+        println!("{}", "╚══════════════════════════════════════════════════╝".cyan());
+
+        let mut config = AppConfig::default();
+
+        // ========== Cloudflare 配置 ==========
+        println!("\n{}", "📡 第一步：配置 Cloudflare API 访问".bold().green());
+        println!("{}", "─".repeat(50).dimmed());
+        println!("\n{}", "Cloudflare API 有两种认证方式：".dimmed());
+        println!("  {} API Token - 更安全，权限可控 (推荐)", "1.".cyan());
+        println!("  {} Email + Global API Key - 传统方式", "2.".cyan());
+        println!();
+
+        let auth_options = vec![
+            "🔑 API Token (推荐 - 更安全)",
+            "📧 Email + Global API Key"
+        ];
+        let auth_choice = Select::with_theme(&theme)
+            .with_prompt("请选择认证方式")
             .items(&auth_options)
             .default(0)
             .interact()?;
 
-        let mut config = AppConfig::default();
-
         match auth_choice {
             0 => {
-                let token: String = Input::new()
-                    .with_prompt("请输入 Cloudflare API Token")
+                println!("\n{}", "获取 API Token:".yellow());
+                println!("  1. 访问: {}", "https://dash.cloudflare.com/profile/api-tokens".cyan());
+                println!("  2. 点击 'Create Token'");
+                println!("  3. 选择适当的权限模板或自定义权限");
+                println!();
+
+                let token: String = Input::with_theme(&theme)
+                    .with_prompt("请输入您的 Cloudflare API Token")
                     .interact_text()?;
-                config.cloudflare.api_token = Some(token);
+
+                if token.trim().is_empty() {
+                    anyhow::bail!("API Token 不能为空");
+                }
+                config.cloudflare.api_token = Some(token.trim().to_string());
+                println!("{}", "✓ API Token 已设置".green());
             }
             1 => {
-                let email: String = Input::new()
-                    .with_prompt("请输入 Cloudflare 邮箱")
+                println!("\n{}", "获取 Global API Key:".yellow());
+                println!("  1. 访问: {}", "https://dash.cloudflare.com/profile/api-tokens".cyan());
+                println!("  2. 找到 'Global API Key' 部分");
+                println!("  3. 点击 'View' 查看密钥");
+                println!();
+
+                let email: String = Input::with_theme(&theme)
+                    .with_prompt("请输入您的 Cloudflare 账户邮箱")
                     .interact_text()?;
-                let key: String = Input::new()
+
+                if email.trim().is_empty() || !email.contains('@') {
+                    anyhow::bail!("请输入有效的邮箱地址");
+                }
+
+                let key: String = Input::with_theme(&theme)
                     .with_prompt("请输入 Global API Key")
                     .interact_text()?;
-                config.cloudflare.email = Some(email);
-                config.cloudflare.api_key = Some(key);
+
+                if key.trim().is_empty() {
+                    anyhow::bail!("API Key 不能为空");
+                }
+
+                config.cloudflare.email = Some(email.trim().to_string());
+                config.cloudflare.api_key = Some(key.trim().to_string());
+                println!("{}", "✓ Email + API Key 已设置".green());
             }
             _ => unreachable!(),
         }
 
-        // 可选: 账户 ID
-        let account_id: String = Input::new()
-            .with_prompt("Account ID (可选, 直接回车跳过)")
-            .default(String::new())
-            .interact_text()?;
-        if !account_id.is_empty() {
-            config.cloudflare.account_id = Some(account_id);
+        // Account ID (可选)
+        println!();
+        let need_account_id = Confirm::with_theme(&theme)
+            .with_prompt("是否需要配置 Account ID？(某些 Workers 功能需要)")
+            .default(false)
+            .interact()?;
+
+        if need_account_id {
+            println!("\n{}", "获取 Account ID:".yellow());
+            println!("  1. 访问: {}", "https://dash.cloudflare.com/".cyan());
+            println!("  2. 在右侧边栏可以找到 Account ID");
+            println!();
+
+            let account_id: String = Input::with_theme(&theme)
+                .with_prompt("请输入 Account ID")
+                .allow_empty(true)
+                .interact_text()?;
+
+            if !account_id.trim().is_empty() {
+                config.cloudflare.account_id = Some(account_id.trim().to_string());
+                println!("{}", "✓ Account ID 已设置".green());
+            }
         }
 
-        // AI 配置
-        println!("\n🤖 AI 配置 (用于智能分析, 可选)\n");
+        // ========== AI 配置 ==========
+        println!("\n{}", "🤖 第二步：配置 AI 智能助手 (可选)".bold().green());
+        println!("{}", "─".repeat(50).dimmed());
+        println!("\n{}", "AI 功能可以帮助您：".dimmed());
+        println!("  • 智能分析域名配置");
+        println!("  • 提供安全建议和优化方案");
+        println!("  • 故障诊断和问题解答");
+        println!();
 
-        let ai_url: String = Input::new()
-            .with_prompt("AI API URL")
-            .default("https://api.openai.com/v1".to_string())
-            .interact_text()?;
-        config.ai.api_url = Some(ai_url);
+        let setup_ai = Confirm::with_theme(&theme)
+            .with_prompt("是否配置 AI 功能？")
+            .default(true)
+            .interact()?;
 
-        let ai_key: String = Input::new()
-            .with_prompt("AI API Key (可选, 直接回车跳过)")
-            .default(String::new())
-            .interact_text()?;
-        if !ai_key.is_empty() {
-            config.ai.api_key = Some(ai_key);
+        if setup_ai {
+            println!("\n{}", "支持的 AI 服务：".yellow());
+            println!("  • OpenAI (GPT-4, GPT-3.5)");
+            println!("  • DeepSeek");
+            println!("  • 任何兼容 OpenAI API 的服务");
+            println!();
+
+            let ai_presets = vec![
+                "OpenAI (https://api.openai.com/v1)",
+                "DeepSeek (https://api.deepseek.com)",
+                "自定义 API 地址"
+            ];
+
+            let ai_preset = Select::with_theme(&theme)
+                .with_prompt("选择 AI 服务提供商")
+                .items(&ai_presets)
+                .default(0)
+                .interact()?;
+
+            let ai_url = match ai_preset {
+                0 => "https://api.openai.com/v1".to_string(),
+                1 => "https://api.deepseek.com".to_string(),
+                2 => {
+                    Input::with_theme(&theme)
+                        .with_prompt("请输入自定义 API 地址")
+                        .interact_text()?
+                }
+                _ => unreachable!(),
+            };
+            config.ai.api_url = Some(ai_url.clone());
+            println!("{}", format!("✓ AI API 地址已设置: {}", ai_url).green());
+
+            let ai_key: String = Input::with_theme(&theme)
+                .with_prompt("请输入 AI API Key")
+                .allow_empty(true)
+                .interact_text()?;
+
+            if !ai_key.trim().is_empty() {
+                config.ai.api_key = Some(ai_key.trim().to_string());
+                println!("{}", "✓ AI API Key 已设置".green());
+            } else {
+                println!("{}", "⚠ 未设置 AI API Key，AI 功能将不可用".yellow());
+            }
+
+            // 模型选择
+            let model_options = vec![
+                "gpt-4o (推荐 - 最强大)",
+                "gpt-4o-mini (更快，成本更低)",
+                "gpt-3.5-turbo (经济实惠)",
+                "deepseek-chat",
+                "自定义模型"
+            ];
+
+            let model_choice = Select::with_theme(&theme)
+                .with_prompt("选择 AI 模型")
+                .items(&model_options)
+                .default(0)
+                .interact()?;
+
+            let model = match model_choice {
+                0 => "gpt-4o".to_string(),
+                1 => "gpt-4o-mini".to_string(),
+                2 => "gpt-3.5-turbo".to_string(),
+                3 => "deepseek-chat".to_string(),
+                4 => {
+                    Input::with_theme(&theme)
+                        .with_prompt("请输入模型名称")
+                        .interact_text()?
+                }
+                _ => unreachable!(),
+            };
+            config.ai.model = Some(model.clone());
+            println!("{}", format!("✓ AI 模型已设置: {}", model).green());
+        } else {
+            println!("{}", "ℹ 跳过 AI 配置，您可以稍后运行 'cfai config setup' 重新配置".dimmed());
         }
 
-        let ai_model: String = Input::new()
-            .with_prompt("AI 模型")
-            .default("gpt-4o".to_string())
-            .interact_text()?;
-        config.ai.model = Some(ai_model);
+        // ========== 默认设置 ==========
+        println!("\n{}", "⚙️  第三步：其他设置 (可选)".bold().green());
+        println!("{}", "─".repeat(50).dimmed());
 
-        // 默认域名
-        let default_domain: String = Input::new()
-            .with_prompt("默认域名 (可选, 直接回车跳过)")
-            .default(String::new())
-            .interact_text()?;
-        if !default_domain.is_empty() {
-            config.defaults.domain = Some(default_domain);
+        let need_defaults = Confirm::with_theme(&theme)
+            .with_prompt("是否配置默认域名？(可以简化后续命令)")
+            .default(false)
+            .interact()?;
+
+        if need_defaults {
+            let default_domain: String = Input::with_theme(&theme)
+                .with_prompt("请输入默认域名 (例如: example.com)")
+                .allow_empty(true)
+                .interact_text()?;
+
+            if !default_domain.trim().is_empty() {
+                config.defaults.domain = Some(default_domain.trim().to_string());
+                println!("{}", format!("✓ 默认域名已设置: {}", default_domain.trim()).green());
+            }
         }
 
+        // ========== 保存配置 ==========
+        println!("\n{}", "💾 保存配置...".bold().cyan());
         config.save()?;
-        println!("\n✅ 配置已保存到: {}", Self::config_path()?.display());
+
+        let config_path = Self::config_path()?;
+        println!("\n{}", "╔══════════════════════════════════════════════════╗".green());
+        println!("{}", "║            ✅ 配置完成！                          ║".green());
+        println!("{}", "╚══════════════════════════════════════════════════╝".green());
+        println!("\n{}", format!("配置文件保存在: {}", config_path.display()).dimmed());
+
+        println!("\n{}", "🚀 快速开始：".bold().yellow());
+        println!("  {} 列出所有域名", "cfai zone list".cyan());
+        println!("  {} 查看 DNS 记录", "cfai dns list <domain>".cyan());
+        println!("  {} AI 智能分析", "cfai ai analyze <domain>".cyan());
+        println!("  {} 查看帮助", "cfai --help".cyan());
+        println!();
 
         Ok(config)
     }

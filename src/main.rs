@@ -53,8 +53,8 @@ async fn run() -> Result<()> {
         _ => {}
     }
 
-    // 加载配置
-    let config = AppConfig::load()?.merge_env();
+    // 加载配置并检查是否需要初始化
+    let config = ensure_config_exists().await?;
 
     // AI 命令可能不需要 Cloudflare 认证 (如纯问答)
     let needs_cf_client = !matches!(&cli.command, Commands::Ai(ai_args) if matches!(&ai_args.command, cli::commands::ai::AiCommands::Ask { .. }));
@@ -89,6 +89,41 @@ async fn run() -> Result<()> {
             unreachable!()
         } // 已在上面处理
     }
+}
+
+/// 确保配置文件存在，如果不存在则引导用户创建
+async fn ensure_config_exists() -> Result<AppConfig> {
+    use dialoguer::Confirm;
+
+    let config = AppConfig::load()?.merge_env();
+
+    // 检查是否已配置 Cloudflare 认证
+    let has_cf_token = config.cloudflare.api_token.is_some();
+    let has_cf_key = config.cloudflare.email.is_some() && config.cloudflare.api_key.is_some();
+
+    if !has_cf_token && !has_cf_key {
+        output::title("🎉 欢迎使用 CFAI");
+        println!("\n检测到您是第一次使用 CFAI，需要进行初始配置。");
+        println!("CFAI 是一个 AI 驱动的 Cloudflare 管理工具，可以帮助您：");
+        println!("  • 管理域名、DNS、SSL/TLS");
+        println!("  • 配置防火墙和缓存策略");
+        println!("  • 使用 AI 进行智能分析和优化");
+        println!();
+
+        let should_setup = Confirm::new()
+            .with_prompt("是否现在进行配置？")
+            .default(true)
+            .interact()?;
+
+        if should_setup {
+            return AppConfig::interactive_setup();
+        } else {
+            output::info("您可以稍后运行 'cfai config setup' 进行配置");
+            std::process::exit(0);
+        }
+    }
+
+    Ok(config)
 }
 
 /// 创建 Cloudflare API 客户端

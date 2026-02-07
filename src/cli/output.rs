@@ -21,6 +21,35 @@ impl std::str::FromStr for OutputFormat {
     }
 }
 
+/// 打印欢迎横幅
+pub fn print_banner() {
+    println!("{}", r#"
+   ____  _____    _    ___
+  / ___|  ___|  / \  |_ _|
+ | |   | |_    / _ \  | |
+ | |___|  _   / ___ \ | |
+  \____|_|  /_/   \_\___|
+
+  🚀 AI-Powered Cloudflare Management Tool
+"#.cyan().bold());
+}
+
+/// 打印分隔线
+pub fn separator() {
+    println!("{}", "─".repeat(60).dimmed());
+}
+
+/// 打印双线分隔线
+pub fn separator_bold() {
+    println!("{}", "═".repeat(60).bold());
+}
+
+/// 打印带图标的步骤
+pub fn step(num: usize, msg: &str) {
+    println!("\n{} {}", format!("步骤 {}:", num).bold().cyan(), msg);
+    separator();
+}
+
 /// 打印成功消息
 pub fn success(msg: &str) {
     println!("{} {}", "✅".green(), msg.green());
@@ -33,18 +62,40 @@ pub fn error(msg: &str) {
 
 /// 打印警告消息
 pub fn warn(msg: &str) {
-    println!("{} {}", "⚠️".yellow(), msg.yellow());
+    println!("{} {}", "⚠️ ".yellow(), msg.yellow());
 }
 
 /// 打印信息消息
 pub fn info(msg: &str) {
-    println!("{} {}", "ℹ️".blue(), msg);
+    println!("{} {}", "ℹ️ ".blue(), msg);
+}
+
+/// 打印提示消息
+pub fn tip(msg: &str) {
+    println!("{} {}", "💡".bright_yellow(), msg.bright_yellow());
+}
+
+/// 打印加载中消息
+pub fn loading(msg: &str) {
+    println!("{} {}...", "⏳".cyan(), msg.cyan());
 }
 
 /// 打印标题
 pub fn title(msg: &str) {
     println!("\n{}", msg.bold().cyan());
-    println!("{}", "─".repeat(50).dimmed());
+    separator();
+}
+
+/// 打印大标题（带边框）
+pub fn title_box(msg: &str) {
+    let width = 60;
+    let padding = (width - msg.len() - 4) / 2;
+    let left_pad = " ".repeat(padding);
+    let right_pad = " ".repeat(width - msg.len() - 4 - padding);
+
+    println!("\n{}", "╔".to_string() + &"═".repeat(width - 2) + "╗");
+    println!("{}", format!("║{}{}{}║", left_pad, msg, right_pad).cyan().bold());
+    println!("{}", "╚".to_string() + &"═".repeat(width - 2) + "╝");
 }
 
 /// 打印键值对
@@ -60,6 +111,27 @@ pub fn kv_colored(key: &str, value: &str, is_good: bool) {
         value.red().to_string()
     };
     println!("  {} {}", format!("{}:", key).dimmed(), colored_value);
+}
+
+/// 打印列表项
+pub fn list_item(msg: &str) {
+    println!("  {} {}", "•".cyan(), msg);
+}
+
+/// 打印带编号的列表项
+pub fn list_numbered(num: usize, msg: &str) {
+    println!("  {} {}", format!("{}.", num).cyan(), msg);
+}
+
+/// 打印进度信息
+pub fn progress(current: usize, total: usize, msg: &str) {
+    println!(
+        "{} [{}/{}] {}",
+        "▶".cyan(),
+        current.to_string().green(),
+        total.to_string().dimmed(),
+        msg
+    );
 }
 
 /// 创建表格
@@ -91,12 +163,33 @@ pub fn print_json<T: serde::Serialize>(data: &T) {
 /// 打印 AI 分析结果
 pub fn print_ai_result(content: &str, tokens: Option<u32>) {
     println!("\n{}", "🤖 AI 分析结果".bold().cyan());
-    println!("{}", "─".repeat(50).dimmed());
+    separator();
     println!("{}", content);
 
     if let Some(t) = tokens {
-        println!("\n{}", format!("Token 用量: {}", t).dimmed());
+        println!("\n{}", format!("💬 Token 用量: {}", t).dimmed());
     }
+    println!();
+}
+
+/// 打印状态徽章
+pub fn badge(label: &str, status: &str, is_good: bool) {
+    let colored_status = if is_good {
+        format!(" {} ", status).black().on_green()
+    } else {
+        format!(" {} ", status).black().on_red()
+    };
+    println!("{} {}", label.dimmed(), colored_status);
+}
+
+/// 打印命令建议
+pub fn suggest_command(desc: &str, cmd: &str) {
+    println!("  {} {}", desc.dimmed(), cmd.cyan());
+}
+
+/// 打印空行
+pub fn newline() {
+    println!();
 }
 
 /// 打印 AI 建议的操作
