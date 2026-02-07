@@ -228,7 +228,13 @@ fn extract_binary(asset_name: &str, bytes: &[u8]) -> Result<Vec<u8>> {
         for i in 0..archive.len() {
             let mut file = archive.by_index(i).context("读取 zip 条目失败")?;
             let name = file.name().to_lowercase();
-            if name.ends_with(binary_name()) {
+            // 匹配 cfai 可执行文件
+            let is_binary = name.ends_with(binary_name())
+                || (name.contains("cfai")
+                    && !name.ends_with(".md")
+                    && !name.ends_with(".txt")
+                    && !name.contains('.'));
+            if is_binary {
                 let mut out = Vec::new();
                 file.read_to_end(&mut out)
                     .context("读取 zip 二进制失败")?;
@@ -249,8 +255,17 @@ fn extract_from_tar<R: Read>(archive: &mut tar::Archive<R>) -> Result<Vec<u8>> {
             .path()
             .context("读取 tar 路径失败")?
             .to_string_lossy()
-            .to_lowercase();
-        if path.ends_with(binary_name()) {
+            .to_string();
+        let path_lower = path.to_lowercase();
+
+        // 匹配 cfai 可执行文件（包括 cfai, cfai-darwin-arm64 等格式）
+        let is_binary = path_lower.ends_with(binary_name())
+            || (path_lower.contains("cfai")
+                && !path_lower.ends_with(".md")
+                && !path_lower.ends_with(".txt")
+                && !path_lower.contains('.'));
+
+        if is_binary {
             let mut out = Vec::new();
             entry.read_to_end(&mut out).context("读取 tar 二进制失败")?;
             return Ok(out);
