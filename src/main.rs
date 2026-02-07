@@ -42,8 +42,21 @@ async fn run() -> Result<()> {
         .ok();
     }
 
+    // 如果没有提供命令，自动进入交互模式
+    let command = match cli.command {
+        Some(cmd) => cmd,
+        None => {
+            // 直接进入交互模式
+            output::print_banner();
+            println!("💡 提示：直接运行 {} 进入交互模式\n", "cfai".cyan());
+
+            let interactive_args = cli::commands::interactive::InteractiveArgs { once: false };
+            return interactive_args.execute(&cli.format, cli.verbose).await;
+        }
+    };
+
     // Config / 安装 / 更新 / 交互 命令不需要认证
-    match &cli.command {
+    match &command {
         Commands::Config(config_args) => return config_args.execute().await,
         Commands::Install(args) => return args.execute().await,
         Commands::Update(args) => return args.execute().await,
@@ -57,7 +70,7 @@ async fn run() -> Result<()> {
     let config = ensure_config_exists().await?;
 
     // AI 命令可能不需要 Cloudflare 认证 (如纯问答)
-    let needs_cf_client = !matches!(&cli.command, Commands::Ai(ai_args) if matches!(&ai_args.command, cli::commands::ai::AiCommands::Ask { .. }));
+    let needs_cf_client = !matches!(&command, Commands::Ai(ai_args) if matches!(&ai_args.command, cli::commands::ai::AiCommands::Ask { .. }));
 
     if needs_cf_client {
         if let Err(e) = config.validate() {
@@ -75,7 +88,7 @@ async fn run() -> Result<()> {
     let client = create_client(&config)?;
     let format = &cli.format;
 
-    match &cli.command {
+    match &command {
         Commands::Zone(args) => args.execute(&client, format).await,
         Commands::Dns(args) => args.execute(&client, format).await,
         Commands::Ssl(args) => args.execute(&client, format).await,

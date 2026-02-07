@@ -22,11 +22,11 @@ use clap::{Parser, Subcommand};
     version,
     about = "🚀 AI 驱动的 Cloudflare 域名管理工具",
     long_about = "CFAI 是一个强大的 CLI 工具，集成 AI 智能分析，\n帮助你高效管理 Cloudflare 域名、DNS、SSL、防火墙等所有功能。",
-    after_help = "使用示例:\n  cfai zone list                    # 列出所有域名\n  cfai dns list example.com          # 列出 DNS 记录\n  cfai ai ask \"如何优化我的域名\"     # AI 智能问答\n  cfai ai analyze example.com        # AI 全面分析"
+    after_help = "使用示例:\n  cfai                              # 进入交互模式（推荐）\n  cfai zone list                    # 列出所有域名\n  cfai dns list example.com          # 列出 DNS 记录\n  cfai ai ask \"如何优化我的域名\"     # AI 智能问答\n  cfai ai analyze example.com        # AI 全面分析"
 )]
 pub struct Cli {
     #[command(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
 
     /// 输出格式 (table/json/plain)
     #[arg(long, global = true, default_value = "table")]
