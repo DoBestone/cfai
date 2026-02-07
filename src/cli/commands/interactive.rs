@@ -74,7 +74,14 @@ impl InteractiveArgs {
 
                 println!();
                 output::separator();
-                run_cfai(args)?;
+                match run_cfai(args) {
+                    Ok(_) => {}
+                    Err(e) => {
+                        if e.to_string() != "用户取消操作" {
+                            output::error(&format!("{}", e));
+                        }
+                    }
+                }
                 output::separator();
                 println!();
             }
@@ -128,31 +135,26 @@ fn build_zone_args(theme: &ColorfulTheme) -> Result<Option<Vec<String>>> {
 
     match selection {
         0 => Ok(Some(vec!["zone".into(), "list".into()])),
-        1 => Ok(Some(vec![
-            "zone".into(),
-            "get".into(),
-            prompt_domain(theme)?,
-        ])),
-        2 => Ok(Some(vec![
-            "zone".into(),
-            "add".into(),
-            prompt_domain(theme)?,
-        ])),
-        3 => Ok(Some(vec![
-            "zone".into(),
-            "pause".into(),
-            prompt_domain(theme)?,
-        ])),
-        4 => Ok(Some(vec![
-            "zone".into(),
-            "resume".into(),
-            prompt_domain(theme)?,
-        ])),
-        5 => Ok(Some(vec![
-            "zone".into(),
-            "settings".into(),
-            prompt_domain(theme)?,
-        ])),
+        1 => {
+            let domain = prompt_domain(theme)?;
+            Ok(Some(vec!["zone".into(), "get".into(), domain]))
+        }
+        2 => {
+            let domain = prompt_domain(theme)?;
+            Ok(Some(vec!["zone".into(), "add".into(), domain]))
+        }
+        3 => {
+            let domain = prompt_domain(theme)?;
+            Ok(Some(vec!["zone".into(), "pause".into(), domain]))
+        }
+        4 => {
+            let domain = prompt_domain(theme)?;
+            Ok(Some(vec!["zone".into(), "resume".into(), domain]))
+        }
+        5 => {
+            let domain = prompt_domain(theme)?;
+            Ok(Some(vec!["zone".into(), "settings".into(), domain]))
+        }
         _ => Ok(None),
     }
 }
@@ -652,7 +654,63 @@ fn build_custom_args(theme: &ColorfulTheme) -> Result<Option<Vec<String>>> {
 }
 
 fn prompt_domain(theme: &ColorfulTheme) -> Result<String> {
-    prompt_text(theme, "域名 (如: example.com)")
+    let items = vec![
+        "📋 从域名列表中选择",
+        "✍️  手动输入域名",
+        "⬅️  返回上级菜单",
+    ];
+    let selection = Select::with_theme(theme)
+        .with_prompt("选择域名输入方式")
+        .items(&items)
+        .default(0)
+        .interact()?;
+
+    match selection {
+        0 => {
+            // 从域名列表选择
+            output::loading("正在获取域名列表...");
+            let exe = std::env::current_exe().map_err(|e| anyhow!("获取可执行文件失败: {}", e))?;
+            let output = Command::new(exe)
+                .args(&["zone", "list", "--format", "plain"])
+                .output()?;
+
+            if !output.status.success() {
+                output::warn("获取域名列表失败，请手动输入");
+                return prompt_text(theme, "域名 (如: example.com)");
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let domains: Vec<&str> = stdout.lines().filter(|line| !line.trim().is_empty()).collect();
+
+            if domains.is_empty() {
+                output::warn("未找到域名，请手动输入");
+                return prompt_text(theme, "域名 (如: example.com)");
+            }
+
+            let mut domain_items = domains.clone();
+            domain_items.push("⬅️  返回");
+
+            let domain_sel = Select::with_theme(theme)
+                .with_prompt("选择域名")
+                .items(&domain_items)
+                .default(0)
+                .interact()?;
+
+            if domain_sel == domain_items.len() - 1 {
+                return Err(anyhow!("用户取消操作"));
+            }
+
+            Ok(domains[domain_sel].to_string())
+        }
+        1 => {
+            // 手动输入
+            prompt_text(theme, "域名 (如: example.com)")
+        }
+        _ => {
+            // 返回上级菜单
+            Err(anyhow!("用户取消操作"))
+        }
+    }
 }
 
 fn prompt_text(theme: &ColorfulTheme, prompt: &str) -> Result<String> {
