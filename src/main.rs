@@ -42,9 +42,15 @@ async fn run() -> Result<()> {
         .ok();
     }
 
-    // Config 命令不需要认证
-    if let Commands::Config(config_args) = &cli.command {
-        return config_args.execute().await;
+    // Config / 安装 / 更新 / 交互 命令不需要认证
+    match &cli.command {
+        Commands::Config(config_args) => return config_args.execute().await,
+        Commands::Install(args) => return args.execute().await,
+        Commands::Update(args) => return args.execute().await,
+        Commands::Interactive(args) => {
+            return args.execute(&cli.format, cli.verbose).await
+        }
+        _ => {}
     }
 
     // 加载配置
@@ -79,7 +85,9 @@ async fn run() -> Result<()> {
         Commands::Workers(args) => args.execute(&client, &config, format).await,
         Commands::Analytics(args) => args.execute(&client, format).await,
         Commands::Ai(args) => args.execute(&client, &config, format).await,
-        Commands::Config(_) => unreachable!(), // 已在上面处理
+        Commands::Config(_) | Commands::Install(_) | Commands::Update(_) | Commands::Interactive(_) => {
+            unreachable!()
+        } // 已在上面处理
     }
 }
 

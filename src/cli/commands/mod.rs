@@ -8,6 +8,10 @@ pub mod workers;
 pub mod analytics;
 pub mod ai;
 pub mod config;
+pub mod install;
+pub mod interactive;
+pub mod self_update;
+pub mod update;
 
 use clap::{Parser, Subcommand};
 
@@ -70,4 +74,13 @@ pub enum Commands {
 
     /// 配置管理
     Config(config::ConfigArgs),
+
+    /// 安装 CFAI (下载 Release 二进制)
+    Install(install::InstallArgs),
+
+    /// 更新 CFAI (下载 Release 二进制)
+    Update(update::UpdateArgs),
+
+    /// 交互模式
+    Interactive(interactive::InteractiveArgs),
 }

@@ -57,6 +57,11 @@ url = "2"
 
 # Clipboard
 arboard = "3"
+flate2 = "1"
+tar = "0.4"
+zip = "2"
+tempfile = "3"
+shell-words = "1"
 
 [profile.release]
 opt-level = "z"

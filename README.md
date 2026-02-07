@@ -36,7 +36,7 @@
 
 ### 方式一：下载预编译二进制（推荐）
 
-前往 [Releases](https://github.com/niceyoo/cfai/releases) 页面下载对应平台的二进制文件：
+前往 [Releases](https://github.com/DoBestone/cfai/releases/latest) 页面下载对应平台的二进制文件：
 
 ```bash
 # macOS / Linux
@@ -47,17 +47,23 @@ sudo mv cfai /usr/local/bin/
 cfai --version
 ```
 
+### 方式一（可选）：一键安装脚本
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/DoBestone/cfai/main/scripts/install.sh | bash
+```
+
 ### 方式二：使用 Cargo 安装
 
 ```bash
-cargo install --git https://github.com/niceyoo/cfai.git
+cargo install --git https://github.com/DoBestone/cfai.git
 ```
 
 ### 方式三：从源码编译
 
 ```bash
 # 确保已安装 Rust 1.70+ (https://rustup.rs)
-git clone https://github.com/niceyoo/cfai.git
+git clone https://github.com/DoBestone/cfai.git
 cd cfai
 cargo build --release
 
@@ -235,6 +241,14 @@ cfai config path                 # 配置文件路径
 cfai config verify               # 验证配置
 ```
 
+### 安装 / 更新 / 交互模式
+
+```bash
+cfai install                     # 下载并安装最新二进制
+cfai update                      # 更新到最新版本
+cfai interactive                 # 进入交互模式
+```
+
 ## 🎛️ 全局选项
 
 ```bash
@@ -319,7 +333,7 @@ cfai/
 
 ```bash
 # Install
-cargo install --git https://github.com/niceyoo/cfai.git
+cargo install --git https://github.com/DoBestone/cfai.git
 
 # Setup
 cfai config setup
