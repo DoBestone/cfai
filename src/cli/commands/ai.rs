@@ -1,8 +1,10 @@
 use anyhow::Result;
 use clap::{Args, Subcommand};
 use colored::Colorize;
+use dialoguer::Confirm;
 
 use crate::ai::analyzer::AiAnalyzer;
+use crate::ai::executor;
 use crate::api::client::CfClient;
 use crate::cli::output;
 use crate::cli::commands::zone::resolve_zone_id;
@@ -72,6 +74,13 @@ impl AiArgs {
 
                 if let Some(actions) = &result.actions {
                     output::print_ai_actions(actions);
+                    if !actions.is_empty() {
+                        println!(
+                            "\n{}",
+                            "💡 Ask 模式无域名上下文，如需执行建议操作请使用 analyze/troubleshoot/auto-config 并指定域名"
+                                .dimmed()
+                        );
+                    }
                 }
             }
 
@@ -160,25 +169,29 @@ impl AiArgs {
 
                 if let Some(actions) = &result.actions {
                     output::print_ai_actions(actions);
+                    prompt_execute_actions(client, &zone_id, actions).await?;
                 }
             }
 
             AiCommands::Troubleshoot { issue, domain } => {
                 let issue_str = issue.join(" ");
+                let resolved_zone_id = if let Some(d) = domain {
+                    Some(resolve_zone_id(client, d).await?)
+                } else {
+                    None
+                };
 
                 let spinner = indicatif::ProgressBar::new_spinner();
                 spinner.set_message("🔍 正在诊断...");
                 spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-                let result = if let Some(domain) = domain {
-                    let zone_id = resolve_zone_id(client, domain).await?;
-                    // 收集域名上下文
+                let result = if let (Some(domain), Some(zone_id)) = (domain, &resolved_zone_id) {
                     let mut context = format!("域名: {}\n", domain);
 
-                    if let Ok(zone) = client.get_zone(&zone_id).await {
+                    if let Ok(zone) = client.get_zone(zone_id).await {
                         context.push_str(&format!("状态: {}\n", zone.status));
                     }
-                    if let Ok(mode) = client.get_ssl_mode(&zone_id).await {
+                    if let Ok(mode) = client.get_ssl_mode(zone_id).await {
                         context.push_str(&format!("SSL: {}\n", mode));
                     }
 
@@ -194,6 +207,14 @@ impl AiArgs {
 
                 if let Some(actions) = &result.actions {
                     output::print_ai_actions(actions);
+                    if let Some(zone_id) = &resolved_zone_id {
+                        prompt_execute_actions(client, zone_id, actions).await?;
+                    } else if !actions.is_empty() {
+                        println!(
+                            "\n{}",
+                            "💡 指定 --domain 参数后可执行建议操作".dimmed()
+                        );
+                    }
                 }
             }
 
@@ -216,22 +237,48 @@ impl AiArgs {
                 if let Some(actions) = &result.actions {
                     output::print_ai_actions(actions);
 
-                    if *auto_apply {
-                        output::warn("⚠️ 自动执行功能暂未实现，请手动执行以上建议操作");
-                        // TODO: 实现自动执行 AI 建议的操作
-                    } else if !actions.is_empty() {
-                        println!(
-                            "\n{}",
-                            "💡 使用 --auto-apply 可自动执行建议操作 (请谨慎使用)"
-                                .dimmed()
-                        );
+                    if !actions.is_empty() {
+                        if let Some(domain) = domain {
+                            let zone_id = resolve_zone_id(client, domain).await?;
+                            if *auto_apply {
+                                executor::execute_actions(client, &zone_id, actions).await?;
+                            } else {
+                                prompt_execute_actions(client, &zone_id, actions).await?;
+                            }
+                        } else {
+                            println!(
+                                "\n{}",
+                                "💡 指定 --domain 参数后可执行建议操作".dimmed()
+                            );
+                        }
                     }
                 }
-
-                let _ = domain; // 将来用于获取域名上下文
             }
         }
 
         Ok(())
     }
+}
+
+/// 交互式提示用户是否执行 AI 建议的操作
+async fn prompt_execute_actions(
+    client: &CfClient,
+    zone_id: &str,
+    actions: &[crate::ai::analyzer::SuggestedAction],
+) -> Result<()> {
+    if actions.is_empty() {
+        return Ok(());
+    }
+
+    println!();
+    let confirm = Confirm::new()
+        .with_prompt("是否执行以上建议操作?")
+        .default(false)
+        .interact()?;
+
+    if confirm {
+        executor::execute_actions(client, zone_id, actions).await?;
+    }
+
+    Ok(())
 }
