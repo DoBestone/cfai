@@ -2,6 +2,8 @@ mod ai;
 mod api;
 mod cli;
 mod config;
+#[cfg(feature = "gui")]
+mod gui;
 mod models;
 
 use anyhow::Result;
@@ -63,6 +65,10 @@ async fn run() -> Result<()> {
         Commands::Interactive(args) => {
             return args.execute(&cli.format, cli.verbose).await
         }
+        #[cfg(feature = "gui")]
+        Commands::Gui => {
+            return crate::gui::launch_gui();
+        }
         _ => {}
     }
 
@@ -100,7 +106,11 @@ async fn run() -> Result<()> {
         Commands::Ai(args) => args.execute(&client, &config, format).await,
         Commands::Config(_) | Commands::Install(_) | Commands::Update(_) | Commands::Interactive(_) => {
             unreachable!()
-        } // 已在上面处理
+        }
+        #[cfg(feature = "gui")]
+        Commands::Gui => {
+            unreachable!()
+        }
     }
 }
 

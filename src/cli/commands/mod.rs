@@ -83,4 +83,8 @@ pub enum Commands {
 
     /// 交互模式
     Interactive(interactive::InteractiveArgs),
+
+    /// 启动图形界面 (GUI)
+    #[cfg(feature = "gui")]
+    Gui,
 }
